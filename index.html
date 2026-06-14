@@ -120,6 +120,7 @@ font-size:12px;
 
 <script>
 
+
 let chart;
 let reports = JSON.parse(localStorage.getItem("reports") || "[]");
 
@@ -141,9 +142,10 @@ const desc = document.getElementById("desc").value;
 
 if(chart) chart.destroy();
 
-chart = new Chart(document.getElementById("chart"),{
+/* total pour % */
+const total = data.reduce((a,b)=>a+b,0);
 
-plugins:[ChartDataLabels],
+chart = new Chart(document.getElementById("chart"),{
 
 type:type,
 
@@ -154,27 +156,39 @@ label:title,
 data:data,
 backgroundColor:palette,
 borderColor:"#fff",
-borderWidth:2,
-
-datalabels:{
-color:"#fff",
-font:{weight:"bold"},
-formatter:(value,ctx)=>{
-const sum = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
-return ((value*100)/sum).toFixed(1)+"%";
-}
-}
+borderWidth:2
 }]
 },
 
 options:{
 responsive:true,
+
 plugins:{
+
 legend:{labels:{color:"white"}},
+
 title:{
 display:true,
 text:title + (desc ? " — " + desc : ""),
 color:"white"
+},
+
+/* 🔥 POURCENTAGES */
+datalabels:{
+color:"#fff",
+font:{weight:"bold"},
+
+formatter:(value,ctx)=>{
+
+// pie / doughnut = % réel
+if(type==="pie" || type==="doughnut" || type==="polarArea"){
+return ((value/total)*100).toFixed(1)+"%";
+}
+
+// autres graphiques = ratio %
+return ((value/total)*100).toFixed(1)+"%";
+}
+
 }
 }
 }
@@ -256,46 +270,34 @@ update();
 function deleteReport(id){
 
 reports = reports.filter(r=>r.id!==id);
+
 localStorage.setItem("reports",JSON.stringify(reports));
+
 render();
 
 }
 
-
+/* ================= PDF EXPORT PRO ================= */
 
 async function exportPDF(){
 
 const { jsPDF } = window.jspdf;
-const pdf = new jsPDF({ format: "a5" });
+const pdf = new jsPDF({ format:"a5" });
 
-let y = 10;
-
-/* ================= HEADER PAGE ================= */
 function addHeader(){
 pdf.setFontSize(14);
-pdf.setTextColor(30);
 pdf.text("RAPPORT GRAPHIQUE PROFESSIONNEL", 10, 10);
 }
 
-/* ================= SIGNATURE FIXE ================= */
 function addSignature(){
 pdf.setFontSize(9);
 pdf.setTextColor(120);
 
-pdf.text(
-"Créé par ETS LesFacilitateurs Groupe",
-10,
-pdf.internal.pageSize.height - 12
-);
-
-pdf.text(
-"WhatsApp: +237 651 475 255 / +237 670 035 609",
-10,
-pdf.internal.pageSize.height - 6
-);
+pdf.text("Créé par ETS LesFacilitateurs Groupe", 10, 190);
+pdf.text("WhatsApp: +237 651 475 255 / +237 670 035 609", 10, 195);
 }
 
-/* ================= CREATE CHART IMAGE ================= */
+/* créer image chart */
 async function createChartImage(r){
 
 const canvas = document.createElement("canvas");
@@ -304,30 +306,20 @@ canvas.height = 350;
 
 const ctx = canvas.getContext("2d");
 
-/* couleurs dynamiques selon type */
-let bgColors = [
-"#38bdf8","#22c55e","#f97316","#a855f7",
-"#ef4444","#eab308","#14b8a6","#f472b6"
-];
-
-/* pie / doughnut = couleurs multiples obligatoires */
-if(r.type === "pie" || r.type === "doughnut" || r.type === "polarArea"){
-bgColors = bgColors;
-}else{
-bgColors = "#38bdf8";
-}
+const total = r.data.split(",").map(Number).reduce((a,b)=>a+b,0);
 
 new Chart(ctx,{
 
 type:r.type,
 
+plugins:[ChartDataLabels],
+
 data:{
 labels:r.labels.split(","),
 datasets:[{
-label:r.title,
 data:r.data.split(",").map(Number),
-backgroundColor:bgColors,
-borderColor:"#ffffff",
+backgroundColor:palette,
+borderColor:"#fff",
 borderWidth:2
 }]
 },
@@ -335,52 +327,45 @@ borderWidth:2
 options:{
 responsive:false,
 animation:false,
+
 plugins:{
-legend:{
-labels:{color:"#000"}
+legend:{labels:{color:"#000"}},
+
+datalabels:{
+color:"#000",
+font:{weight:"bold"},
+formatter:(v)=>((v/total)*100).toFixed(1)+"%"
 }
 }
 }
 
 });
 
-/* attendre rendu complet */
-await new Promise(res => requestAnimationFrame(res));
+await new Promise(r=>requestAnimationFrame(r));
 
 return canvas.toDataURL("image/png");
 }
 
-/* ================= LOOP REPORTS ================= */
-addHeader();
-
+/* LOOP */
 for(let i=0;i<reports.length;i++){
 
 const r = reports[i];
 
-/* nouvelle page si pas assez de place */
-if(i !== 0){
+if(i!==0){
 pdf.addPage();
-y = 10;
-addHeader();
 }
 
-/* TEXTES */
+addHeader();
+
 pdf.setFontSize(11);
-pdf.setTextColor(0);
+pdf.text("Titre: " + r.title, 10, 20);
+pdf.text("Description: " + (r.desc || "—"), 10, 26);
+pdf.text("Date: " + r.date, 10, 32);
 
-pdf.text("Titre: " + r.title, 10, y); y += 6;
-pdf.text("Description: " + (r.desc || "—"), 10, y); y += 6;
-pdf.text("Date: " + r.date, 10, y); y += 8;
-
-/* IMAGE CHART */
 const img = await createChartImage(r);
 
-pdf.addImage(img, "PNG", 10, y, 130, 70);
+pdf.addImage(img, "PNG", 10, 40, 130, 70);
 
-/* espace */
-y += 80;
-
-/* signature sur chaque page */
 addSignature();
 
 }

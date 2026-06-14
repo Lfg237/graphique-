@@ -261,6 +261,8 @@ render();
 
 }
 
+
+
 async function exportPDF(){
 
 const { jsPDF } = window.jspdf;
@@ -268,58 +270,65 @@ const pdf = new jsPDF({ format: "a5" });
 
 let y = 10;
 
+/* ================= HEADER PAGE ================= */
+function addHeader(){
 pdf.setFontSize(14);
-pdf.text("RAPPORT GRAPHIQUE COMPLET", 10, y);
-y += 10;
+pdf.setTextColor(30);
+pdf.text("RAPPORT GRAPHIQUE PROFESSIONNEL", 10, 10);
+}
 
-for(const r of reports){
-
-pdf.setFontSize(11);
-pdf.text("Titre: " + r.title, 10, y);
-y += 6;
-
+/* ================= SIGNATURE FIXE ================= */
+function addSignature(){
 pdf.setFontSize(9);
-pdf.text("Description: " + (r.desc || "—"), 10, y);
-y += 6;
+pdf.setTextColor(120);
 
-pdf.text("Date: " + r.date, 10, y);
-y += 8;
+pdf.text(
+"Créé par ETS LesFacilitateurs Groupe",
+10,
+pdf.internal.pageSize.height - 12
+);
 
-/* CANVAS TEMPORAIRE */
+pdf.text(
+"WhatsApp: +237 651 475 255 / +237 670 035 609",
+10,
+pdf.internal.pageSize.height - 6
+);
+}
+
+/* ================= CREATE CHART IMAGE ================= */
+async function createChartImage(r){
+
 const canvas = document.createElement("canvas");
 canvas.width = 600;
-canvas.height = 300;
+canvas.height = 350;
 
 const ctx = canvas.getContext("2d");
 
-/* IMPORTANT : chart avec datalabels activé */
-const tempChart = new Chart(ctx,{
-
-type: r.type,
-
-plugins:[ChartDataLabels],
-
-data:{
-labels: r.labels.split(","),
-datasets:[{
-label: r.title,
-data: r.data.split(",").map(Number),
-backgroundColor: [
+/* couleurs dynamiques selon type */
+let bgColors = [
 "#38bdf8","#22c55e","#f97316","#a855f7",
 "#ef4444","#eab308","#14b8a6","#f472b6"
-],
-borderColor:"#fff",
-borderWidth:2,
+];
 
-datalabels:{
-color:"#fff",
-font:{weight:"bold", size:12},
-formatter:(value,ctx)=>{
-const data = ctx.chart.data.datasets[0].data;
-const total = data.reduce((a,b)=>a+b,0);
-return ((value * 100) / total).toFixed(1) + "%";
+/* pie / doughnut = couleurs multiples obligatoires */
+if(r.type === "pie" || r.type === "doughnut" || r.type === "polarArea"){
+bgColors = bgColors;
+}else{
+bgColors = "#38bdf8";
 }
-}
+
+new Chart(ctx,{
+
+type:r.type,
+
+data:{
+labels:r.labels.split(","),
+datasets:[{
+label:r.title,
+data:r.data.split(",").map(Number),
+backgroundColor:bgColors,
+borderColor:"#ffffff",
+borderWidth:2
 }]
 },
 
@@ -327,37 +336,56 @@ options:{
 responsive:false,
 animation:false,
 plugins:{
-legend:{labels:{color:"white"}}
+legend:{
+labels:{color:"#000"}
+}
 }
 }
 
 });
 
-/* 🔥 attendre vrai rendu Chart.js */
-await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+/* attendre rendu complet */
+await new Promise(res => requestAnimationFrame(res));
 
-/* convertir en image */
-const img = canvas.toDataURL("image/png");
+return canvas.toDataURL("image/png");
+}
 
-pdf.addImage(img, "PNG", 10, y, 120, 60);
+/* ================= LOOP REPORTS ================= */
+addHeader();
 
-y += 70;
+for(let i=0;i<reports.length;i++){
 
-if(y > 130){
+const r = reports[i];
+
+/* nouvelle page si pas assez de place */
+if(i !== 0){
 pdf.addPage();
 y = 10;
+addHeader();
 }
 
+/* TEXTES */
+pdf.setFontSize(11);
+pdf.setTextColor(0);
+
+pdf.text("Titre: " + r.title, 10, y); y += 6;
+pdf.text("Description: " + (r.desc || "—"), 10, y); y += 6;
+pdf.text("Date: " + r.date, 10, y); y += 8;
+
+/* IMAGE CHART */
+const img = await createChartImage(r);
+
+pdf.addImage(img, "PNG", 10, y, 130, 70);
+
+/* espace */
+y += 80;
+
+/* signature sur chaque page */
+addSignature();
+
 }
 
-/* SIGNATURE PRO */
-pdf.setFontSize(10);
-pdf.setTextColor(120);
-
-pdf.text("Créé par ETS LesFacilitateurs Groupe", 10, 190);
-pdf.text("WhatsApp: +237 651 475 255 / +237 670 035 609", 10, 197);
-
-pdf.save("rapport-graphique.pdf");
+pdf.save("rapport-graphique-pro.pdf");
 }
 
 </script>

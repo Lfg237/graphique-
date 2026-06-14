@@ -136,6 +136,9 @@ const palette = [
 
 /* ================= CHART ================= */
 
+
+
+
 function createChart(){
 
 if(chart) chart.destroy();
@@ -148,7 +151,10 @@ const data = document.getElementById("data").value.split(",").map(Number);
 
 const ctx = document.getElementById("chart");
 
-const isCircle = ["pie","doughnut","polarArea"].includes(type);
+const isCircular =
+["pie","doughnut","polarArea"].includes(type);
+
+const total = data.reduce((a,b)=>a+b,0);
 
 chart = new Chart(ctx,{
 type:type,
@@ -157,34 +163,51 @@ labels,
 datasets:[{
 label:title,
 data,
-backgroundColor: isCircle ? palette : "#38bdf8",
+backgroundColor: palette,
 borderColor:"#fff",
 borderWidth:2
 }]
 },
+
 options:{
 responsive:true,
+
 plugins:{
+
 legend:{labels:{color:"white"}},
+
 title:{
 display:true,
 text:title + (desc ? " - " + desc : ""),
 color:"white"
 },
+
+/* ✅ POURCENTAGES ICI */
 datalabels:{
+color:"#ffffff",
+font:{weight:"bold",size:12},
+
 formatter:(value,ctx)=>{
-if(!isCircle) return "";
-const sum = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
-return ((value*100)/sum).toFixed(1)+"%";
-},
-color:"white"
+
+// 🔥 PIE / DOUGHNUT / POLAR AREA => %
+if(isCircular){
+const percent = (value * 100 / total).toFixed(1);
+return percent + "%";
+}
+
+// 🔥 BAR / LINE / RADAR => valeur normale
+return value;
 }
 }
+}
 },
+
 plugins:[ChartDataLabels]
 });
 
 }
+
+
 
 /* ================= SAVE ================= */
 

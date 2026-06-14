@@ -48,6 +48,7 @@ font-weight:bold;
 
 canvas{max-height:420px;}
 
+/* RAPPORTS HORIZONTAL */
 #reportsGrid{
 display:flex;
 flex-wrap:wrap;
@@ -60,6 +61,7 @@ padding:12px;
 border-radius:12px;
 min-width:250px;
 flex:1;
+border:1px solid rgba(255,255,255,0.08);
 }
 
 .card h4{color:#38bdf8;margin:0;}
@@ -118,28 +120,30 @@ font-size:12px;
 
 <script>
 
+
 let chart;
 let reports = JSON.parse(localStorage.getItem("reports") || "[]");
 
 const palette = [
 "#38bdf8","#22c55e","#f97316","#a855f7",
-"#ef4444","#eab308","#14b8a6","#f472b6"
+"#ef4444","#eab308","#14b8a6","#f472b6",
+"#60a5fa","#34d399","#f87171","#c084fc"
 ];
 
-/* ================= REGISTER PLUGIN ================= */
-Chart.register(ChartDataLabels);
+/* ================= UPDATE CHART ================= */
 
-/* ================= UPDATE ================= */
 function update(){
 
-const type = chartType.value;
+const type = document.getElementById("chartType").value;
 const title = document.getElementById("title").value;
-const desc = document.getElementById("desc").value;
-
 const labels = document.getElementById("labels").value.split(",");
 const data = document.getElementById("data").value.split(",").map(Number);
+const desc = document.getElementById("desc").value;
 
 if(chart) chart.destroy();
+
+/* total pour % */
+const total = data.reduce((a,b)=>a+b,0);
 
 chart = new Chart(document.getElementById("chart"),{
 
@@ -157,8 +161,11 @@ borderWidth:2
 },
 
 options:{
+responsive:true,
 
 plugins:{
+
+legend:{labels:{color:"white"}},
 
 title:{
 display:true,
@@ -166,24 +173,22 @@ text:title + (desc ? " — " + desc : ""),
 color:"white"
 },
 
-legend:{labels:{color:"white"}},
-
-/* ===== POURCENTAGES ===== */
+/* 🔥 POURCENTAGES */
 datalabels:{
 color:"#fff",
 font:{weight:"bold"},
 
 formatter:(value,ctx)=>{
 
-const arr = ctx.dataset.data;
-const total = arr.reduce((a,b)=>a+b,0);
-
+// pie / doughnut = % réel
 if(type==="pie" || type==="doughnut" || type==="polarArea"){
 return ((value/total)*100).toFixed(1)+"%";
 }
 
-return value;
+// autres graphiques = ratio %
+return ((value/total)*100).toFixed(1)+"%";
 }
+
 }
 }
 }
@@ -193,6 +198,7 @@ return value;
 }
 
 /* ================= SAVE ================= */
+
 function save(){
 
 reports.push({
@@ -208,10 +214,13 @@ date:new Date().toLocaleString()
 if(reports.length>10) reports.shift();
 
 localStorage.setItem("reports",JSON.stringify(reports));
+
 render();
+
 }
 
 /* ================= RENDER ================= */
+
 function render(){
 
 const grid=document.getElementById("reportsGrid");
@@ -224,7 +233,7 @@ div.className="card";
 
 div.innerHTML=`
 <h4>${r.title}</h4>
-<p>${r.desc || ""}</p>
+<p style="font-size:12px;opacity:0.8">${r.desc || ""}</p>
 <p style="font-size:11px">${r.date}</p>
 
 <div class="card-actions">
@@ -240,6 +249,7 @@ grid.appendChild(div);
 }
 
 /* ================= LOAD ================= */
+
 function loadReport(id){
 
 const r = reports.find(x=>x.id===id);
@@ -256,81 +266,111 @@ update();
 }
 
 /* ================= DELETE ================= */
+
 function deleteReport(id){
 
 reports = reports.filter(r=>r.id!==id);
+
 localStorage.setItem("reports",JSON.stringify(reports));
+
 render();
 
 }
 
-/* ================= PDF FIX PRO (IMPORTANT) ================= */
+/* ================= PDF EXPORT PRO ================= */
+
 async function exportPDF(){
 
 const { jsPDF } = window.jspdf;
-const pdf = new jsPDF({format:"a5"});
+const pdf = new jsPDF({ format:"a5" });
 
-let y = 10;
-
-/* signature */
-function signature(){
-pdf.setFontSize(8);
-pdf.setTextColor(120);
-pdf.text("Créé par ETS LesFacilitateurs Groupe",10,200);
-pdf.text("WhatsApp: +237651475255 / +237670035609",10,205);
+function addHeader(){
+pdf.setFontSize(14);
+pdf.text("RAPPORT GRAPHIQUE PROFESSIONNEL", 10, 10);
 }
 
-/* chart image */
-async function makeChart(r){
+function addSignature(){
+pdf.setFontSize(9);
+pdf.setTextColor(120);
 
-const c = document.createElement("canvas");
-c.width=500;
-c.height=300;
+pdf.text("Créé par ETS LesFacilitateurs Groupe", 10, 190);
+pdf.text("WhatsApp: +237 651 475 255 / +237 670 035 609", 10, 195);
+}
 
-const ctx=c.getContext("2d");
+/* créer image chart */
+async function createChartImage(r){
+
+const canvas = document.createElement("canvas");
+canvas.width = 600;
+canvas.height = 350;
+
+const ctx = canvas.getContext("2d");
+
+const total = r.data.split(",").map(Number).reduce((a,b)=>a+b,0);
 
 new Chart(ctx,{
+
 type:r.type,
+
+plugins:[ChartDataLabels],
+
 data:{
 labels:r.labels.split(","),
 datasets:[{
 data:r.data.split(",").map(Number),
 backgroundColor:palette,
-borderColor:"#fff"
+borderColor:"#fff",
+borderWidth:2
 }]
 },
-options:{animation:false}
+
+options:{
+responsive:false,
+animation:false,
+
+plugins:{
+legend:{labels:{color:"#000"}},
+
+datalabels:{
+color:"#000",
+font:{weight:"bold"},
+formatter:(v)=>((v/total)*100).toFixed(1)+"%"
+}
+}
+}
+
 });
 
-await new Promise(res=>setTimeout(res,300));
+await new Promise(r=>requestAnimationFrame(r));
 
-return c.toDataURL("image/png");
+return canvas.toDataURL("image/png");
 }
 
+/* LOOP */
 for(let i=0;i<reports.length;i++){
 
-const r=reports[i];
+const r = reports[i];
 
-if(i>0) pdf.addPage();
-
-pdf.setFontSize(12);
-pdf.text(r.title,10,y);
-y+=6;
-
-pdf.setFontSize(9);
-pdf.text(r.desc||"",10,y);
-y+=8;
-
-const img = await makeChart(r);
-
-pdf.addImage(img,"PNG",10,y,130,70);
-
-signature();
-
-y=10;
+if(i!==0){
+pdf.addPage();
 }
 
-pdf.save("rapport-pro.pdf");
+addHeader();
+
+pdf.setFontSize(11);
+pdf.text("Titre: " + r.title, 10, 20);
+pdf.text("Description: " + (r.desc || "—"), 10, 26);
+pdf.text("Date: " + r.date, 10, 32);
+
+const img = await createChartImage(r);
+
+pdf.addImage(img, "PNG", 10, 40, 130, 70);
+
+addSignature();
+
+}
+
+pdf.save("rapport-graphique-pro.pdf");
 }
 
 </script>
